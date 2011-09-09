@@ -7,10 +7,13 @@ import org.kohsuke.args4j.Option;
 
 public class Options
 {
- @Option( name = "-r", usage="Save server response. (Assumes -l)")
+ @Option( name = "-r", usage="Process recursively")
+ private boolean recursive;
+
+ @Option( name = "-e", usage="Save server response")
  private boolean saveResponse;
 
- @Option( name = "-s", usage="Store files in database (assumes -l). Otherwise they will be verified but not stored")
+ @Option( name = "-s", usage="Store files in database. Otherwise they will be verified but not stored")
  private boolean store;
  
  @Option( name = "-h", usage="Database base URL", metaVar="URL")
@@ -28,7 +31,7 @@ public class Options
  @Option( name = "-new", usage="Load new submissions")
  private boolean newSub;
 
- @Option( name = "-o", usage="Output directory")
+ @Option( name = "-o", usage="Output directory", metaVar="DIR")
  private String outDir;
  
  @Argument
@@ -84,4 +87,8 @@ public class Options
   return outDir;
  }
 
+ public boolean isRecursive()
+ {
+  return recursive;
+ }
 }

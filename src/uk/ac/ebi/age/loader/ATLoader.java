@@ -5,7 +5,10 @@ import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -30,14 +33,14 @@ import uk.ac.ebi.age.ext.submission.Status;
 
 public class ATLoader
 {
- static final String usage = "java -jar ATLoader.jar [options...] <input dir> [ ... <input dir> ]";
+ static final String usage = "java -jar ATLoader.jar -o OUTDIR [options...] <input dir> [ ... <input dir> ]";
 
- /**
-  * @param args
-  */
+
+ private static Options options = new Options();
+ 
  public static void main(String[] args)
  {
-  Options options = new Options();
+  
   CmdLineParser parser = new CmdLineParser(options);
 
   try
@@ -60,32 +63,29 @@ public class ATLoader
   }
   
   
-  List<File> infiles = new ArrayList<File>();
+  Set<File> infiles = new HashSet<File>();
+
+  Set<String> processedDirs = new HashSet<String>();
   
- 
-  for( String outf : options.getDirs() )
+  for(String outf : options.getDirs())
   {
-   File in = new File( outf );
+   File in = new File(outf);
+
+   if( ! in.exists() )
+   {
+    System.err.println("Input directory '" + outf + "' doesn't exist");
+    System.exit(1);
+   }
+   else if( ! in.isDirectory() )
+   {
+    System.err.println("'" + outf + "' is not a directory");
+    System.exit(1);
+   }
    
-   
-   if( in.isDirectory() )
-   {
-    for( File sdir : in.listFiles() )
-     if( sdir.isDirectory() )
-      infiles.add(sdir);
-   }
-   else if( in.exists() )
-   {
-    System.err.println("ERROR: '"+in.getAbsolutePath()+"' is not a directory");
-    System.exit(2);
-   }
-   else
-   {
-    System.err.println("Input directory '"+in.getAbsolutePath()+"' doesn't exist");
-    return;
-   }
+   collectInput( in, infiles, processedDirs ) ;
+
   }
-  
+
   
   if( infiles.size() == 0 )
   {
@@ -258,7 +258,11 @@ public class ATLoader
       if(!options.isStore())
        reqEntity.addPart(SubmissionConstants.VERIFY_ONLY, new StringBody("on"));
 
-      if( sbmId != null )
+      File sbId = new File(sbmDir,".id");
+      
+      if( sbId.canRead() )
+       reqEntity.addPart(SubmissionConstants.SUBMISSON_ID, new FileBody(sbId, "text/plain", "UTF-8"));
+      else if( sbmId != null )
        reqEntity.addPart(SubmissionConstants.SUBMISSON_ID, new StringBody(sbmId));
       
       File descr = new File(sbmDir,".description");
@@ -271,17 +275,24 @@ public class ATLoader
       for( File modFile : modules )
       {
        n++;
-       
-       String modName = modFile.getName().substring(0,modFile.getName().length()-8);
 
-       reqEntity.addPart(SubmissionConstants.MODULE_ID+n, new StringBody(modName) );
+       File modId = new File(sbmDir,".id."+modFile.getName());
        
-       File modDesc = new File( sbmDir, ".description."+modName);
+       if( modId.canRead() )
+        reqEntity.addPart(SubmissionConstants.MODULE_ID+n, new FileBody(modId, "text/plain", "UTF-8"));
+       else
+       {
+        String modName = modFile.getName().substring(0,modFile.getName().length()-8);
+        
+        reqEntity.addPart(SubmissionConstants.MODULE_ID+n, new StringBody(modName) );
+       }
+       
+       File modDesc = new File( sbmDir, ".description."+modFile.getName());
        
        if( modDesc.canRead() )
         reqEntity.addPart(SubmissionConstants.MODULE_DESCRIPTION + n, new FileBody(modDesc, "text/plain", "UTF-8"));
        else
-        reqEntity.addPart(SubmissionConstants.MODULE_DESCRIPTION + n, new StringBody(modName) );
+        reqEntity.addPart(SubmissionConstants.MODULE_DESCRIPTION + n, new StringBody(modFile.getName()) );
 
        reqEntity.addPart(SubmissionConstants.MODULE_STATUS + n, new StringBody(sts.name()));
 
@@ -293,7 +304,13 @@ public class ATLoader
       {
        n++;
        
-       reqEntity.addPart(SubmissionConstants.ATTACHMENT_ID+n, new StringBody(attFile.getName()) );
+       File attId = new File(sbmDir,".id."+attFile.getName());
+       
+       if( attId.canRead() )
+        reqEntity.addPart(SubmissionConstants.ATTACHMENT_ID+n, new FileBody(attId, "text/plain", "UTF-8"));
+       else
+        reqEntity.addPart(SubmissionConstants.ATTACHMENT_ID+n, new StringBody(attFile.getName()) );
+
        
        File attDesc = new File( sbmDir, ".description."+attFile.getName());
        
@@ -380,6 +397,23 @@ public class ATLoader
     httpclient.getConnectionManager().shutdown();
 
    log.close();
+  }
+ }
+
+ 
+ static void collectInput( File in, Collection<File> infiles, Set<String> processedDirs )
+ {
+  File[] files = in.listFiles();
+  
+  for( File f : files )
+  {
+   if( f.isDirectory() && ! processedDirs.contains(f.getAbsolutePath()) && options.isRecursive() )
+   {
+    collectInput(f, infiles, processedDirs);
+    processedDirs.add(f.getAbsolutePath());
+   }
+   else if( f.getName().endsWith(".age.txt") && f.isFile() )
+    infiles.add( in );
   }
  }
 
