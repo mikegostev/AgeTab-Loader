@@ -31,6 +31,12 @@ public class Options
  @Option( name = "-new", usage="Load new submissions")
  private boolean newSub;
 
+ @Option( name = "-i", usage="Use directory name as submission ID")
+ private boolean dirAsID;
+
+ @Option( name = "-m", usage="Use module file name as module ID")
+ private boolean modFileAsID;
+
  @Option( name = "-o", usage="Output directory", metaVar="DIR")
  private String outDir;
  
@@ -90,5 +96,15 @@ public class Options
  public boolean isRecursive()
  {
   return recursive;
+ }
+
+ public boolean isDirAsID()
+ {
+  return dirAsID;
+ }
+
+ public boolean isModFileAsID()
+ {
+  return modFileAsID;
  }
 }

@@ -1,7 +1,10 @@
 package uk.ac.ebi.age.loader;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
@@ -29,6 +32,8 @@ import org.kohsuke.args4j.CmdLineParser;
 import uk.ac.ebi.age.admin.shared.Constants;
 import uk.ac.ebi.age.admin.shared.SubmissionConstants;
 import uk.ac.ebi.age.ext.submission.Status;
+
+import com.pri.util.stream.StreamPump;
 
 
 public class ATLoader
@@ -209,22 +214,22 @@ public class ATLoader
   List<File> modules = new ArrayList<File>();
   List<File> attachments = new ArrayList<File>();
    
+  int counter=1;
+  
   try
   {
-   for(File sbmDir : infiles)
+   submissions: for(File sbmDir : infiles)
    {
+    log.println("Processing: "+sbmDir.getAbsolutePath());
 
     HttpPost post = new HttpPost( options.getDatabaseURL()+"upload?"+Constants.sessionKey+"="+sessionKey );
 
     String key = String.valueOf(System.currentTimeMillis());
     
-     MultipartEntity reqEntity = new MultipartEntity();
+    MultipartEntity reqEntity = new MultipartEntity();
 
-     String sbmId = sbmDir.getName();
+    String sbmId = null;
      
-     if( sbmId.startsWith(".") )
-      sbmId = null;
-
      modules.clear();
      attachments.clear();
      
@@ -261,38 +266,109 @@ public class ATLoader
       File sbId = new File(sbmDir,".id");
       
       if( sbId.canRead() )
-       reqEntity.addPart(SubmissionConstants.SUBMISSON_ID, new FileBody(sbId, "text/plain", "UTF-8"));
-      else if( sbmId != null )
-       reqEntity.addPart(SubmissionConstants.SUBMISSON_ID, new StringBody(sbmId));
+      {
+       try
+       {
+        sbmId = readFile(sbId).trim();
+       }
+       catch(IOException e)
+       {
+        log.println("ERROR: Can't read file: "+sbId.getAbsolutePath());
+        continue;
+       }
+      }
+      
+      if( sbmId == null && options.isDirAsID() )
+       sbmId = sbmDir.getName();
+      else if( sts != Status.NEW && ( sbmId == null || sbmId.length() == 0 ) )
+      {
+       log.println("ERROR: Submission ID is not specified");
+       continue;
+      }
+       
+      reqEntity.addPart(SubmissionConstants.SUBMISSON_ID, new StringBody(sbmId));
+      
+      if( sbmId == null || sbmId.length() == 0)
+       sbmId = "_$"+(counter++);
       
       File descr = new File(sbmDir,".description");
 
       if( descr.canRead() )
-       reqEntity.addPart(SubmissionConstants.SUBMISSON_DESCR, new FileBody(descr, "text/plain","UTF-8"));
-
+      {
+       try
+       {
+        reqEntity.addPart(SubmissionConstants.SUBMISSON_DESCR, new StringBody(readFile(descr)) );
+       }
+       catch(IOException e)
+       {
+        log.println("ERROR: Can't read file: "+descr.getAbsolutePath());
+        continue;
+       }
+      }
+      
       int n=0;
       
       for( File modFile : modules )
       {
        n++;
 
-       File modId = new File(sbmDir,".id."+modFile.getName());
+       log.println("Processing module: "+modFile.getAbsolutePath());
        
-       if( modId.canRead() )
-        reqEntity.addPart(SubmissionConstants.MODULE_ID+n, new FileBody(modId, "text/plain", "UTF-8"));
-       else
+       String modId = null;
+       
+       File modIdFile = new File(sbmDir,".id."+modFile.getName());
+       
+       if( modIdFile.canRead() )
        {
-        String modName = modFile.getName().substring(0,modFile.getName().length()-8);
-        
-        reqEntity.addPart(SubmissionConstants.MODULE_ID+n, new StringBody(modName) );
+        try
+        {
+         modId = readFile(modIdFile).trim();
+        }
+        catch(IOException e)
+        {
+         log.println("ERROR: Can't read file: "+modIdFile.getAbsolutePath());
+         continue submissions;
+        }
        }
        
-       File modDesc = new File( sbmDir, ".description."+modFile.getName());
+       if( modId != null && modId.length() == 0 )
+        modId = null;
+
+       if( modId == null )
+       {
+        if( options.isModFileAsID() )
+         modId = modFile.getName().substring(0,modFile.getName().length()-8);
+        else if( sts != Status.NEW )
+        {
+         log.println("ERROR: Module ID is not specified");
+         continue submissions;
+        }
+       }
        
-       if( modDesc.canRead() )
-        reqEntity.addPart(SubmissionConstants.MODULE_DESCRIPTION + n, new FileBody(modDesc, "text/plain", "UTF-8"));
-       else
-        reqEntity.addPart(SubmissionConstants.MODULE_DESCRIPTION + n, new StringBody(modFile.getName()) );
+       reqEntity.addPart(SubmissionConstants.MODULE_ID+n, new StringBody(modId) );
+       
+       
+       File modDescFile = new File( sbmDir, ".description."+modFile.getName());
+       
+       String modDesc = null;
+       
+       if( modDescFile.canRead() )
+       {
+        try
+        {
+         modDesc = readFile(modDescFile);
+        }
+        catch(IOException e)
+        {
+         log.println("ERROR: Can't read file: "+modDescFile.getAbsolutePath());
+         continue submissions;
+        }
+       }
+        
+       if( modDesc == null )
+        modDesc = modFile.getName();
+       
+       reqEntity.addPart(SubmissionConstants.MODULE_DESCRIPTION + n, new StringBody(modDesc) );
 
        reqEntity.addPart(SubmissionConstants.MODULE_STATUS + n, new StringBody(sts.name()));
 
@@ -304,21 +380,57 @@ public class ATLoader
       {
        n++;
        
-       File attId = new File(sbmDir,".id."+attFile.getName());
        
-       if( attId.canRead() )
-        reqEntity.addPart(SubmissionConstants.ATTACHMENT_ID+n, new FileBody(attId, "text/plain", "UTF-8"));
-       else
-        reqEntity.addPart(SubmissionConstants.ATTACHMENT_ID+n, new StringBody(attFile.getName()) );
+       String attId = null;
+       
+       File attIdFile = new File(sbmDir,".id."+attFile.getName());
+       
+       if( attIdFile.canRead() )
+       {
+        try
+        {
+         attId = readFile(attIdFile).trim();
+        }
+        catch(IOException e)
+        {
+         log.println("ERROR: Can't read file: "+attIdFile.getAbsolutePath());
+         continue submissions;
+        }
+       }
+       
+       if( attId != null && attId.length() == 0 )
+        attId = null;
+
+       if( attId == null)
+        attId = attFile.getName();
+       
+       reqEntity.addPart(SubmissionConstants.ATTACHMENT_ID+n, new StringBody(attId) );
 
        
-       File attDesc = new File( sbmDir, ".description."+attFile.getName());
+       File attDescFile = new File( sbmDir, ".description."+attFile.getName());
        
-       if( attDesc.canRead() )
-        reqEntity.addPart(SubmissionConstants.ATTACHMENT_DESC + n, new FileBody(attDesc, "text/plain","UTF-8"));
-       else
-        reqEntity.addPart(SubmissionConstants.ATTACHMENT_DESC + n, new StringBody(attFile.getName()) );
+       
+       String attDesc = null;
+       
+       if( attDescFile.canRead() )
+       {
+        try
+        {
+         attDesc = readFile(attDescFile);
+        }
+        catch(IOException e)
+        {
+         log.println("ERROR: Can't read file: "+attDescFile.getAbsolutePath());
+         continue submissions;
+        }
+       }
+        
+       if( attDesc == null )
+        attDesc = attFile.getName();
 
+       reqEntity.addPart(SubmissionConstants.ATTACHMENT_DESC + n, new StringBody(attDesc) );
+       
+       
        reqEntity.addPart(SubmissionConstants.ATTACHMENT_STATUS + n, new StringBody(sts.name()));
 
        reqEntity.addPart(SubmissionConstants.ATTACHMENT_FILE + n, new FileBody(attFile, "application/binary"));
@@ -370,7 +482,7 @@ public class ATLoader
       if(options.isSaveResponse())
       {
        log.println("Writing response");
-       File rspf = new File(outDir, sbmDir.getName() + '.' + respStat);
+       File rspf = new File(outDir, sbmId + '.' + respStat);
 
        PrintWriter pw = new PrintWriter(rspf, "UTF-8");
 
@@ -386,8 +498,8 @@ public class ATLoader
       return;
      }
 
-    log.println("File '"+sbmDir.getName()+ "' done");
-    System.out.println("File '"+sbmDir.getName()+ "' done");
+    log.println("Submission '"+sbmDir.getAbsolutePath()+ "' done");
+    System.out.println("File '"+sbmDir.getAbsolutePath()+ "' done");
 
    }
   }
@@ -415,6 +527,17 @@ public class ATLoader
    else if( f.getName().endsWith(".age.txt") && f.isFile() )
     infiles.add( in );
   }
+ }
+ 
+ static String readFile( File f ) throws IOException
+ {
+  ByteArrayOutputStream baos = new ByteArrayOutputStream();
+  
+  FileInputStream fis = new FileInputStream(f);
+  
+  StreamPump.doPump(fis, baos, true);
+
+  return new String( baos.toByteArray(), "UTF-8");
  }
 
 }

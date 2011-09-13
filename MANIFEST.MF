@@ -1,2 +1,2 @@
 Manifest-Version: 1.0
-Main-Class: uk.ac.ebi.sampletab.STConverter
+Main-Class: uk.ac.ebi.age.loader.ATLoader

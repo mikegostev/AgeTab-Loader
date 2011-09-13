@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project name="SampleTab-Loader" default="dist" basedir=".">
+<project name="AgeTab-Loader" default="dist" basedir=".">
 	<description>BioSample Database</description>
 	<!-- set global properties for this build -->
 
@@ -60,7 +60,7 @@
         </unzip>
 
     <!-- Put everything in ${build} into the MyProject-${DSTAMP}.jar file -->
- <jar jarfile="${dist}/STConverter.jar" basedir="${build}" manifest="MANIFEST.MF" />
+ <jar jarfile="${dist}/ATLoader.jar" basedir="${build}" manifest="MANIFEST.MF" />
  
  </target>
 
