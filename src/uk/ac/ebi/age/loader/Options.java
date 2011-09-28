@@ -39,7 +39,16 @@ public class Options
 
  @Option( name = "-o", usage="Output directory", metaVar="DIR")
  private String outDir;
- 
+
+ @Option( name = "-t", usage="Number of threads", metaVar="THRNUM")
+ private String thrNum;
+
+ @Option( name = "-c", usage="Continue loading")
+ private boolean continueLd;
+
+ @Option( name = "-f", usage="Refresh submissions")
+ private boolean refresh;
+
  @Argument
  private List<String> dirs;
 
@@ -107,4 +116,20 @@ public class Options
  {
   return modFileAsID;
  }
+
+ public String getThreadsNumber()
+ {
+  return thrNum;
+ }
+
+ public boolean isContinue()
+ {
+  return continueLd;
+ }
+ 
+ public boolean isRefresh()
+ {
+  return refresh;
+ }
+
 }

@@ -1,17 +1,16 @@
 package uk.ac.ebi.age.loader;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.io.PrintStream;
 import java.io.PrintWriter;
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -19,21 +18,12 @@ import org.apache.http.HttpStatus;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.mime.MultipartEntity;
-import org.apache.http.entity.mime.content.FileBody;
-import org.apache.http.entity.mime.content.StringBody;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.protocol.HTTP;
 import org.apache.http.util.EntityUtils;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
-
-import uk.ac.ebi.age.admin.shared.Constants;
-import uk.ac.ebi.age.admin.shared.SubmissionConstants;
-import uk.ac.ebi.age.ext.submission.Status;
-
-import com.pri.util.stream.StreamPump;
 
 
 public class ATLoader
@@ -209,307 +199,8 @@ public class ATLoader
    }
   }
   
+  //options.getDatabaseURL()+"upload?"+Constants.sessionKey+"="+sessionKey
   
-  
-  List<File> modules = new ArrayList<File>();
-  List<File> attachments = new ArrayList<File>();
-   
-  int counter=1;
-  
-  try
-  {
-   submissions: for(File sbmDir : infiles)
-   {
-    log.println("Processing: "+sbmDir.getAbsolutePath());
-
-    HttpPost post = new HttpPost( options.getDatabaseURL()+"upload?"+Constants.sessionKey+"="+sessionKey );
-
-    String key = String.valueOf(System.currentTimeMillis());
-    
-    MultipartEntity reqEntity = new MultipartEntity();
-
-    String sbmId = null;
-     
-     modules.clear();
-     attachments.clear();
-     
-     for( File f : sbmDir.listFiles() )
-     {
-      if( ! f.isFile() || f.getName().startsWith(".") )
-       continue;
-      
-      if( f.getName().endsWith(".age.txt") )
-       modules.add(f);
-      else
-       attachments.add(f);
-     }
-     
-     try
-     {
-
-      Status sts;
-
-      if( options.isNewSubmissions() )
-       sts = Status.NEW;
-      else if( options.isUpdateSubmissions() )
-       sts = Status.UPDATE;
-      else
-       sts = Status.UPDATEORNEW;
-
-      reqEntity.addPart(Constants.uploadHandlerParameter, new StringBody(SubmissionConstants.SUBMISSON_COMMAND));
-      reqEntity.addPart(SubmissionConstants.SUBMISSON_KEY, new StringBody(key));
-      reqEntity.addPart(SubmissionConstants.SUBMISSON_STATUS, new StringBody(sts.name()) );
-
-      if(!options.isStore())
-       reqEntity.addPart(SubmissionConstants.VERIFY_ONLY, new StringBody("on"));
-
-      File sbId = new File(sbmDir,".id");
-      
-      if( sbId.canRead() )
-      {
-       try
-       {
-        sbmId = readFile(sbId).trim();
-       }
-       catch(IOException e)
-       {
-        log.println("ERROR: Can't read file: "+sbId.getAbsolutePath());
-        continue;
-       }
-      }
-      
-      if( sbmId == null && options.isDirAsID() )
-       sbmId = sbmDir.getName();
-      else if( sts != Status.NEW && ( sbmId == null || sbmId.length() == 0 ) )
-      {
-       log.println("ERROR: Submission ID is not specified");
-       continue;
-      }
-       
-      reqEntity.addPart(SubmissionConstants.SUBMISSON_ID, new StringBody(sbmId));
-      
-      if( sbmId == null || sbmId.length() == 0)
-       sbmId = "_$"+(counter++);
-      
-      File descr = new File(sbmDir,".description");
-
-      if( descr.canRead() )
-      {
-       try
-       {
-        reqEntity.addPart(SubmissionConstants.SUBMISSON_DESCR, new StringBody(readFile(descr)) );
-       }
-       catch(IOException e)
-       {
-        log.println("ERROR: Can't read file: "+descr.getAbsolutePath());
-        continue;
-       }
-      }
-      
-      int n=0;
-      
-      for( File modFile : modules )
-      {
-       n++;
-
-       log.println("Processing module: "+modFile.getAbsolutePath());
-       
-       String modId = null;
-       
-       File modIdFile = new File(sbmDir,".id."+modFile.getName());
-       
-       if( modIdFile.canRead() )
-       {
-        try
-        {
-         modId = readFile(modIdFile).trim();
-        }
-        catch(IOException e)
-        {
-         log.println("ERROR: Can't read file: "+modIdFile.getAbsolutePath());
-         continue submissions;
-        }
-       }
-       
-       if( modId != null && modId.length() == 0 )
-        modId = null;
-
-       if( modId == null )
-       {
-        if( options.isModFileAsID() )
-         modId = modFile.getName().substring(0,modFile.getName().length()-8);
-        else if( sts != Status.NEW )
-        {
-         log.println("ERROR: Module ID is not specified");
-         continue submissions;
-        }
-       }
-       
-       reqEntity.addPart(SubmissionConstants.MODULE_ID+n, new StringBody(modId) );
-       
-       
-       File modDescFile = new File( sbmDir, ".description."+modFile.getName());
-       
-       String modDesc = null;
-       
-       if( modDescFile.canRead() )
-       {
-        try
-        {
-         modDesc = readFile(modDescFile);
-        }
-        catch(IOException e)
-        {
-         log.println("ERROR: Can't read file: "+modDescFile.getAbsolutePath());
-         continue submissions;
-        }
-       }
-        
-       if( modDesc == null )
-        modDesc = modFile.getName();
-       
-       reqEntity.addPart(SubmissionConstants.MODULE_DESCRIPTION + n, new StringBody(modDesc) );
-
-       reqEntity.addPart(SubmissionConstants.MODULE_STATUS + n, new StringBody(sts.name()));
-
-       reqEntity.addPart(SubmissionConstants.MODULE_FILE + n, new FileBody(modFile, "text/plain", "UTF-8"));
-      }
-      
-
-      for( File attFile : attachments )
-      {
-       n++;
-       
-       
-       String attId = null;
-       
-       File attIdFile = new File(sbmDir,".id."+attFile.getName());
-       
-       if( attIdFile.canRead() )
-       {
-        try
-        {
-         attId = readFile(attIdFile).trim();
-        }
-        catch(IOException e)
-        {
-         log.println("ERROR: Can't read file: "+attIdFile.getAbsolutePath());
-         continue submissions;
-        }
-       }
-       
-       if( attId != null && attId.length() == 0 )
-        attId = null;
-
-       if( attId == null)
-        attId = attFile.getName();
-       
-       reqEntity.addPart(SubmissionConstants.ATTACHMENT_ID+n, new StringBody(attId) );
-
-       
-       File attDescFile = new File( sbmDir, ".description."+attFile.getName());
-       
-       
-       String attDesc = null;
-       
-       if( attDescFile.canRead() )
-       {
-        try
-        {
-         attDesc = readFile(attDescFile);
-        }
-        catch(IOException e)
-        {
-         log.println("ERROR: Can't read file: "+attDescFile.getAbsolutePath());
-         continue submissions;
-        }
-       }
-        
-       if( attDesc == null )
-        attDesc = attFile.getName();
-
-       reqEntity.addPart(SubmissionConstants.ATTACHMENT_DESC + n, new StringBody(attDesc) );
-       
-       
-       reqEntity.addPart(SubmissionConstants.ATTACHMENT_STATUS + n, new StringBody(sts.name()));
-
-       reqEntity.addPart(SubmissionConstants.ATTACHMENT_FILE + n, new FileBody(attFile, "application/binary"));
-
-       File attGlobal = new File( sbmDir, ".global."+attFile.getName());
-       
-       if( attGlobal.exists() )
-        reqEntity.addPart(SubmissionConstants.ATTACHMENT_GLOBAL + n, new StringBody("on"));
-      }
-
-     }
-     catch(UnsupportedEncodingException e)
-     {
-      log.println("ERROR: UnsupportedEncodingException: " + e.getMessage());
-      return;
-     }
-
-     post.setEntity(reqEntity);
-
-     HttpResponse response;
-     try
-     {
-      response = httpclient.execute(post);
-
-      if(response.getStatusLine().getStatusCode() != HttpStatus.SC_OK)
-      {
-       log.println("Server response code is: " + response.getStatusLine().getStatusCode());
-       return;
-      }
-
-      HttpEntity ent = response.getEntity();
-
-      String respStr = EntityUtils.toString(ent);
-
-      int pos = respStr.indexOf("OK-" + key);
-
-      if(pos == -1)
-      {
-       log.println("ERROR: Invalid server response : " + respStr);
-       continue;
-      }
-
-      pos = pos + key.length() + 5;
-      String respStat = respStr.substring(pos, respStr.indexOf(']', pos));
-
-      log.println("Submission status: " + respStat);
-      System.out.println("Submission status: " + respStat);
-
-      if(options.isSaveResponse())
-      {
-       log.println("Writing response");
-       File rspf = new File(outDir, sbmId + '.' + respStat);
-
-       PrintWriter pw = new PrintWriter(rspf, "UTF-8");
-
-       pw.write(respStr);
-       pw.close();
-      }
-
-      EntityUtils.consume(ent);
-     }
-     catch(Exception e)
-     {
-      log.println("ERROR: IO error: " + e.getMessage());
-      return;
-     }
-
-    log.println("Submission '"+sbmDir.getAbsolutePath()+ "' done");
-    System.out.println("File '"+sbmDir.getAbsolutePath()+ "' done");
-
-   }
-  }
-  finally
-  {
-   if(httpclient != null)
-    httpclient.getConnectionManager().shutdown();
-
-   log.close();
-  }
  }
 
  
@@ -528,16 +219,78 @@ public class ATLoader
     infiles.add( in );
   }
  }
- 
- static String readFile( File f ) throws IOException
- {
-  ByteArrayOutputStream baos = new ByteArrayOutputStream();
-  
-  FileInputStream fis = new FileInputStream(f);
-  
-  StreamPump.doPump(fis, baos, true);
 
-  return new String( baos.toByteArray(), "UTF-8");
+
+ 
+ 
+ static class NullLog implements Log
+ {
+  @Override
+  public void shutdown()
+  {
+  }
+
+  @Override
+  public void write(String msg)
+  {
+  }
+
+  @Override
+  public void printStackTrace(Exception e)
+  {
+  }
+ }
+ 
+ static class PrintStreamLog implements Log
+ {
+  private PrintStream log;
+  private Lock        lock = new ReentrantLock();
+  
+  private boolean showThreads;
+
+  PrintStreamLog(PrintStream l, boolean th)
+  {
+   log = l;
+   showThreads = th;
+  }
+
+  public void shutdown()
+  {
+   log.close();
+  }
+
+  public void write(String msg)
+  {
+   lock.lock();
+
+   try
+   {
+    if( showThreads )
+     log.print("[" + Thread.currentThread().getName() + "] ");
+    
+    log.println(msg);
+   }
+   finally
+   {
+    lock.unlock();
+   }
+  }
+  
+  @Override
+  public void printStackTrace(Exception e)
+  {
+   lock.lock();
+
+   try
+   {
+    e.printStackTrace(log);
+   }
+   finally
+   {
+    lock.unlock();
+   }
+  }
+
  }
 
 }
