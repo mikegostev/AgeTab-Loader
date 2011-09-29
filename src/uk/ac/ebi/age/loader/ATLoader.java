@@ -3,12 +3,15 @@ package uk.ac.ebi.age.loader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintStream;
-import java.io.PrintWriter;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -24,6 +27,8 @@ import org.apache.http.protocol.HTTP;
 import org.apache.http.util.EntityUtils;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
+
+import uk.ac.ebi.age.admin.shared.Constants;
 
 
 public class ATLoader
@@ -58,7 +63,7 @@ public class ATLoader
   }
   
   
-  Set<File> infiles = new HashSet<File>();
+  Set<File> indirs = new HashSet<File>();
 
   Set<String> processedDirs = new HashSet<String>();
   
@@ -77,12 +82,11 @@ public class ATLoader
     System.exit(1);
    }
    
-   collectInput( in, infiles, processedDirs ) ;
-
+   indirs.add(in);
   }
 
   
-  if( infiles.size() == 0 )
+  if( indirs.size() == 0 )
   {
    System.err.println("No files to process");
    return;
@@ -108,14 +112,51 @@ public class ATLoader
    return;
   }
   
+  int nThreads = -1;
+  
+  if( options.getThreadsNumber() != null )
+  {
+   try
+   {
+    nThreads = Integer.parseInt( options.getThreadsNumber() );
+   }
+   catch(Exception e)
+   {
+   }
+   
+   if( nThreads <= 0 || nThreads > 32 )
+   {
+    System.err.println("Invalid number of threads. Should be reasonable positive integer");
+    return;
+   }
+  }
+  else
+   nThreads = 1;
+  
+  
+  BlockingQueue<File> infiles = new LinkedBlockingQueue<File>();
+  
+  if( options.isPreloadFiles() || nThreads == 1 )
+  {
+   new CollectFilesTask(indirs, infiles, options).run();
+
+   if(infiles.size() <= 1 )
+   {
+    System.err.println("No files to process");
+    return;
+   }
+   
+   System.out.println(String.valueOf(infiles.size()+" submissions in the queue"));
+  }
+  
   String sessionKey = null;
   DefaultHttpClient httpclient = null;
   
-  PrintWriter log = null;
+  PrintStream log = null;
   
   try
   {
-   log = new PrintWriter( new File(outDir,"log.txt") );
+   log = new PrintStream( new File(outDir,"log.txt") );
   }
   catch(FileNotFoundException e1)
   {
@@ -199,28 +240,43 @@ public class ATLoader
    }
   }
   
-  //options.getDatabaseURL()+"upload?"+Constants.sessionKey+"="+sessionKey
   
- }
-
- 
- static void collectInput( File in, Collection<File> infiles, Set<String> processedDirs )
- {
-  File[] files = in.listFiles();
-  
-  for( File f : files )
+  if(nThreads == 1)
   {
-   if( f.isDirectory() && ! processedDirs.contains(f.getAbsolutePath()) && options.isRecursive() )
-   {
-    collectInput(f, infiles, processedDirs);
-    processedDirs.add(f.getAbsolutePath());
-   }
-   else if( f.getName().endsWith(".age.txt") && f.isFile() )
-    infiles.add( in );
+   Log psLog = new PrintStreamLog(log, false);
+
+   new SubmitterTask("Main", options.getDatabaseURL() + "upload?" + Constants.sessionKey + "=" + sessionKey, infiles, outDir, options, psLog).run();
+
+   psLog.shutdown();
   }
+  else
+  {
+   Log psLog = new PrintStreamLog(log, true);
+
+   psLog.write("Starting " + nThreads + " threads");
+
+   ExecutorService exec = Executors.newFixedThreadPool(nThreads + 1);
+
+   exec.execute(new CollectFilesTask(indirs, infiles, options));
+
+   for(int i = 1; i <= nThreads; i++)
+    exec.execute(new SubmitterTask("Thr" + i, options.getDatabaseURL() + "upload?" + Constants.sessionKey + "=" + sessionKey, infiles, outDir, options,
+      psLog));
+
+   try
+   {
+    exec.shutdown();
+
+    exec.awaitTermination(72, TimeUnit.HOURS);
+   }
+   catch(InterruptedException e)
+   {
+   }
+
+   psLog.shutdown();
+  }
+
  }
-
-
  
  
  static class NullLog implements Log

@@ -92,6 +92,8 @@ public class SubmitterTask implements Runnable
      
     }
    
+    long stTime = System.currentTimeMillis();
+    
     log.write("Processing: "+sbmDir.getAbsolutePath());
 
     HttpPost post = new HttpPost( url );
@@ -164,7 +166,30 @@ public class SubmitterTask implements Runnable
        {
         File sresp = new File(outDir, sbmId + ".SUCCESS");
         
-        if( sresp.exists() && ( !options.isRefresh()) )
+        boolean uptodate=false;
+        
+        if( sresp.exists() )
+        {
+         uptodate = true;
+         
+         if ( options.isRefresh() )
+         {
+          for( File f : sbmDir.listFiles() )
+          {
+           if( f.lastModified() > sresp.lastModified() )
+           {
+            uptodate = false;
+            break;
+           }
+          }
+         }
+        }
+        
+        if( uptodate )
+        {
+         log.write("Submission '"+sbmId+"' is up-to-date");
+         continue submissions;
+        }
        }
        
        reqEntity.addPart(SubmissionConstants.SUBMISSON_ID, new StringBody(sbmId));
@@ -379,9 +404,11 @@ public class SubmitterTask implements Runnable
       log.write("ERROR: IO error: " + e.getMessage());
       return;
      }
+     
+    long endTime = System.currentTimeMillis()-stTime;
 
-    log.write("Submission '"+sbmDir.getAbsolutePath()+ "' done");
-    System.out.println("File '"+sbmDir.getAbsolutePath()+ "' done");
+    log.write("Submission '"+sbmDir.getAbsolutePath()+ "' done ("+endTime+"ms)");
+    System.out.println("File '"+sbmDir.getAbsolutePath()+ "' done ("+endTime+"ms) "+infiles.size()+" in the queue");
 
    }
   }

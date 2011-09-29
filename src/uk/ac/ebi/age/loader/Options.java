@@ -48,6 +48,9 @@ public class Options
 
  @Option( name = "-f", usage="Refresh submissions")
  private boolean refresh;
+ 
+ @Option( name = "-l", usage="Preload file list")
+ private boolean preloadFiles;
 
  @Argument
  private List<String> dirs;
@@ -130,6 +133,11 @@ public class Options
  public boolean isRefresh()
  {
   return refresh;
+ }
+
+ public boolean isPreloadFiles()
+ {
+  return preloadFiles;
  }
 
 }
