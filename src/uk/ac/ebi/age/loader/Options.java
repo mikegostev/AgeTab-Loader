@@ -52,6 +52,9 @@ public class Options
  @Option( name = "-l", usage="Preload file list")
  private boolean preloadFiles;
 
+ @Option( name = "-a", usage="Tags list. Example: Security:Public,Manager:Enable=2012-01-01")
+ private String tagString;
+
  @Argument
  private List<String> dirs;
 
@@ -138,6 +141,11 @@ public class Options
  public boolean isPreloadFiles()
  {
   return preloadFiles;
+ }
+
+ public String getTagString()
+ {
+  return tagString;
  }
 
 }

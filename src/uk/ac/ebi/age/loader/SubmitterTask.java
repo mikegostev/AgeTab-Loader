@@ -134,6 +134,10 @@ public class SubmitterTask implements Runnable
       reqEntity.addPart(SubmissionConstants.SUBMISSON_KEY, new StringBody(key));
       reqEntity.addPart(SubmissionConstants.SUBMISSON_STATUS, new StringBody(sts.name()) );
 
+      if( options.getTagString() != null )
+       reqEntity.addPart(SubmissionConstants.SUBMISSON_TAGS, new StringBody(options.getTagString()) );
+       
+      
       if(!options.isStore())
        reqEntity.addPart(SubmissionConstants.VERIFY_ONLY, new StringBody("on"));
 
@@ -213,7 +217,27 @@ public class SubmitterTask implements Runnable
        }
       }
       
-      int n=0;
+      
+      if( options.getTagString() == null )
+      {
+       File tagFile = new File(sbmDir,".tags");
+       
+       if( tagFile.canRead() )
+       {
+        try
+        {
+         reqEntity.addPart(SubmissionConstants.SUBMISSON_TAGS, new StringBody(readFile(tagFile)) );
+        }
+        catch(IOException e)
+        {
+         log.write("ERROR: Can't read file: "+tagFile.getAbsolutePath());
+         continue;
+        }
+       }
+      }
+      
+      
+       int n=0;
       
       for( File modFile : modules )
       {
@@ -275,6 +299,22 @@ public class SubmitterTask implements Runnable
        if( modDesc == null )
         modDesc = modFile.getName();
        
+       File modTagsFile = new File( sbmDir, ".tags."+modFile.getName());
+       
+       if( modTagsFile.canRead() )
+       {
+        try
+        {
+         reqEntity.addPart(SubmissionConstants.MODULE_TAGS + n, new StringBody(readFile(modTagsFile)) );
+        }
+        catch(IOException e)
+        {
+         log.write("ERROR: Can't read file: "+modTagsFile.getAbsolutePath());
+         continue submissions;
+        }
+       }
+       
+       
        reqEntity.addPart(SubmissionConstants.MODULE_DESCRIPTION + n, new StringBody(modDesc) );
 
        reqEntity.addPart(SubmissionConstants.MODULE_STATUS + n, new StringBody(sts.name()));
@@ -335,6 +375,23 @@ public class SubmitterTask implements Runnable
        if( attDesc == null )
         attDesc = attFile.getName();
 
+       
+       File attTagsFile = new File( sbmDir, ".tags."+attFile.getName());
+       
+       if( attTagsFile.canRead() )
+       {
+        try
+        {
+         reqEntity.addPart(SubmissionConstants.ATTACHMENT_TAGS + n, new StringBody(readFile(attTagsFile)) );
+        }
+        catch(IOException e)
+        {
+         log.write("ERROR: Can't read file: "+attTagsFile.getAbsolutePath());
+         continue submissions;
+        }
+       }
+
+       
        reqEntity.addPart(SubmissionConstants.ATTACHMENT_DESC + n, new StringBody(attDesc) );
        
        
