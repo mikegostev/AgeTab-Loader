@@ -241,6 +241,70 @@ public class ATLoader
   }
   
   
+  if( options.isMaintenanceMode() )
+  {
+   ok = false;
+
+   try
+   {
+
+    HttpPost httpost = new HttpPost(options.getDatabaseURL() + "upload?" + Constants.sessionKey + "=" + sessionKey);
+
+    List<NameValuePair> nvps = new ArrayList<NameValuePair>();
+    nvps.add(new BasicNameValuePair(Constants.MAINTENANCE_MODE_COMMAND, "true"));
+
+    httpost.setEntity(new UrlEncodedFormEntity(nvps, HTTP.UTF_8));
+
+    log.println("Setting server to maintenance mode");
+
+    HttpResponse response = httpclient.execute(httpost);
+
+    if(response.getStatusLine().getStatusCode() != HttpStatus.SC_OK)
+    {
+     log.println("Server response code is: " + response.getStatusLine().getStatusCode());
+     return;
+    }
+
+    HttpEntity ent = response.getEntity();
+
+    String respStr = EntityUtils.toString(ent).trim();
+
+    if(respStr.startsWith("OK:"))
+    {
+     if( "WAS".equals(respStr.substring(3, 6)) )
+     {
+      System.out.println("Server was in maintenance mode");
+      log.println("Server was in maintenance mode");
+     }
+     else
+     {
+      System.out.println("Setting maintenance mode successful");
+      log.println("Setting maintenance mode successful");
+     }
+     
+     ok = true;
+    }
+
+    EntityUtils.consume(ent);
+
+   }
+   catch(Exception e)
+   {
+    ok = false;
+   }
+   finally
+   {
+    if(!ok)
+    {
+     httpclient.getConnectionManager().shutdown();
+     System.err.println("Setting maintenance mode failed");
+
+     System.exit(1);
+    }
+   }
+
+  }
+  
   if(nThreads == 1)
   {
    Log psLog = new PrintStreamLog(log, false);

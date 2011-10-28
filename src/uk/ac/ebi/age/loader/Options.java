@@ -49,11 +49,14 @@ public class Options
  @Option( name = "-f", usage="Refresh submissions")
  private boolean refresh;
  
- @Option( name = "-l", usage="Preload file list")
- private boolean preloadFiles;
+ @Option( name = "-mmode", usage="Set maintenance mode")
+ private boolean mmode;
 
  @Option( name = "-a", usage="Tags list. Example: Security:Public,Manager:Enable=2012-01-01")
  private String tagString;
+
+ @Option( name = "-l", usage="Preload file list")
+ private boolean preloadFiles;
 
  @Argument
  private List<String> dirs;
@@ -146,6 +149,11 @@ public class Options
  public String getTagString()
  {
   return tagString;
+ }
+
+ public boolean isMaintenanceMode()
+ {
+  return mmode;
  }
 
 }
