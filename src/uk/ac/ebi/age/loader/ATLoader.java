@@ -19,6 +19,7 @@ import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.NameValuePair;
+import org.apache.http.client.HttpClient;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.DefaultHttpClient;
@@ -29,6 +30,7 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 
 import uk.ac.ebi.age.admin.shared.Constants;
+import uk.ac.ebi.age.admin.shared.MaintenanceModeConstants;
 
 
 public class ATLoader
@@ -242,69 +244,8 @@ public class ATLoader
   
   
   if( options.isMaintenanceMode() )
-  {
-   ok = false;
-
-   try
-   {
-
-    HttpPost httpost = new HttpPost(options.getDatabaseURL() + "upload?" + Constants.sessionKey + "=" + sessionKey);
-
-    List<NameValuePair> nvps = new ArrayList<NameValuePair>();
-    nvps.add(new BasicNameValuePair(Constants.MAINTENANCE_MODE_COMMAND, "true"));
-
-    httpost.setEntity(new UrlEncodedFormEntity(nvps, HTTP.UTF_8));
-
-    log.println("Setting server to maintenance mode");
-
-    HttpResponse response = httpclient.execute(httpost);
-
-    if(response.getStatusLine().getStatusCode() != HttpStatus.SC_OK)
-    {
-     log.println("Server response code is: " + response.getStatusLine().getStatusCode());
-     return;
-    }
-
-    HttpEntity ent = response.getEntity();
-
-    String respStr = EntityUtils.toString(ent).trim();
-
-    if(respStr.startsWith("OK:"))
-    {
-     if( "WAS".equals(respStr.substring(3, 6)) )
-     {
-      System.out.println("Server was in maintenance mode");
-      log.println("Server was in maintenance mode");
-     }
-     else
-     {
-      System.out.println("Setting maintenance mode successful");
-      log.println("Setting maintenance mode successful");
-     }
-     
-     ok = true;
-    }
-
-    EntityUtils.consume(ent);
-
-   }
-   catch(Exception e)
-   {
-    ok = false;
-   }
-   finally
-   {
-    if(!ok)
-    {
-     httpclient.getConnectionManager().shutdown();
-     System.err.println("Setting maintenance mode failed");
-
-     System.exit(1);
-    }
-   }
-
-  }
-  
+   setMaintenanceMode(httpclient, true, sessionKey, log);
+   
   if(nThreads == 1)
   {
    Log psLog = new PrintStreamLog(log, false);
@@ -337,11 +278,82 @@ public class ATLoader
    {
    }
 
+   if( options.isMaintenanceMode() )
+    setMaintenanceMode(httpclient, false, sessionKey, log);
+
+   
    psLog.shutdown();
   }
 
  }
  
+ 
+ private static void setMaintenanceMode( HttpClient httpclient,  boolean mode, String sessionKey, PrintStream log )
+ {
+  boolean ok = false;
+
+  try
+  {
+
+   HttpPost httpost = new HttpPost(options.getDatabaseURL() + "upload?" + Constants.sessionKey + "=" + sessionKey);
+
+   List<NameValuePair> nvps = new ArrayList<NameValuePair>();
+   nvps.add(new BasicNameValuePair(Constants.uploadHandlerParameter, Constants.MAINTENANCE_MODE_COMMAND));
+   nvps.add(new BasicNameValuePair(MaintenanceModeConstants.modeParam, String.valueOf(mode)));
+
+   httpost.setEntity(new UrlEncodedFormEntity(nvps, HTTP.UTF_8));
+
+   log.println((mode?"Entering":"Leaving")+" maintenance mode");
+
+   HttpResponse response = httpclient.execute(httpost);
+
+   if(response.getStatusLine().getStatusCode() != HttpStatus.SC_OK)
+   {
+    log.println("Server response code is: " + response.getStatusLine().getStatusCode());
+    return;
+   }
+
+   HttpEntity ent = response.getEntity();
+
+   String respStr = EntityUtils.toString(ent).trim();
+
+   if(respStr.startsWith("OK:"))
+   {
+    if( "WAS".equals(respStr.substring(3, 6)) )
+    {
+     System.out.println("Server was in requested mode");
+     log.println("Server was in requested mode");
+    }
+    else
+    {
+     System.out.println((mode?"Entering":"Leaving")+" maintenance mode successful");
+     log.println((mode?"Entering":"Leaving")+" maintenance mode successful");
+    }
+    
+    ok = true;
+   }
+   else if( respStr.startsWith("ERROR:") )
+    log.println("Maintenance mode switch error: "+respStr.substring(6));
+
+   EntityUtils.consume(ent);
+
+  }
+  catch(Exception e)
+  {
+   ok = false;
+  }
+  finally
+  {
+   if(!ok)
+   {
+    httpclient.getConnectionManager().shutdown();
+    System.err.println("Setting maintenance mode failed");
+
+    System.exit(1);
+   }
+  }
+
+ }
  
  static class NullLog implements Log
  {
