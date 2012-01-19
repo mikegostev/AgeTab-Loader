@@ -55,6 +55,16 @@
                     <target>1.6</target>
                 </configuration>
             </plugin>
+            <!-- for assembly of a zip file containing all dependencies -->
+			<plugin>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<configuration>
+					<finalName>AgeTab-Loader</finalName>
+					<descriptors>
+						<descriptor>src/main/assembly/AGETab-Loader-assembly.xml</descriptor>
+					</descriptors>
+				</configuration>
+			</plugin>
         </plugins>
     </build>
 </project>
