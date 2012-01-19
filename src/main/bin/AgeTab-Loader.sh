@@ -28,4 +28,4 @@ done
 #and other dependent jars
 classpath="$jars:$base/config";
 
-$java $args -classpath $classpath $@
+$java $args -classpath $classpath uk.ac.ebi.age.loader.ATLoader $@
