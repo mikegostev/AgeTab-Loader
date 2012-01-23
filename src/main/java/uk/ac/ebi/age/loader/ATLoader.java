@@ -32,397 +32,319 @@ import org.kohsuke.args4j.CmdLineParser;
 import uk.ac.ebi.age.admin.shared.Constants;
 import uk.ac.ebi.age.admin.shared.MaintenanceModeConstants;
 
+public class ATLoader {
+    static final String usage = "java -jar ATLoader.jar -o OUTDIR [options...] <input dir> [ ... <input dir> ]";
 
-public class ATLoader
-{
- static final String usage = "java -jar ATLoader.jar -o OUTDIR [options...] <input dir> [ ... <input dir> ]";
+    private static Options options = new Options();
 
+    public static void main(String[] args) {
 
- private static Options options = new Options();
- 
- public static void main(String[] args)
- {
-  
-  CmdLineParser parser = new CmdLineParser(options);
+        CmdLineParser parser = new CmdLineParser(options);
 
-  try
-  {
-   parser.parseArgument(args);
-  }
-  catch(CmdLineException e)
-  {
-   System.err.println(e.getMessage());
-   System.err.println(usage);
-   parser.printUsage(System.err);
-   return;
-  }
-  
-  if( options.getDirs() == null || options.getDirs().size() == 0  )
-  {
-   System.err.println(usage);
-   parser.printUsage(System.err);
-   return;
-  }
-  
-  
-  Set<File> indirs = new HashSet<File>();
+        try {
+            parser.parseArgument(args);
+        } catch (CmdLineException e) {
+            System.err.println(e.getMessage());
+            System.err.println(usage);
+            parser.printUsage(System.err);
+            return;
+        }
 
-  Set<String> processedDirs = new HashSet<String>();
-  
-  for(String outf : options.getDirs())
-  {
-   File in = new File(outf);
+        if (options.getDirs() == null || options.getDirs().size() == 0) {
+            System.err.println(usage);
+            parser.printUsage(System.err);
+            return;
+        }
 
-   if( ! in.exists() )
-   {
-    System.err.println("Input directory '" + outf + "' doesn't exist");
-    System.exit(1);
-   }
-   else if( ! in.isDirectory() )
-   {
-    System.err.println("'" + outf + "' is not a directory");
-    System.exit(1);
-   }
-   
-   indirs.add(in);
-  }
+        Set<File> indirs = new HashSet<File>();
 
-  
-  if( indirs.size() == 0 )
-  {
-   System.err.println("No files to process");
-   return;
-  }
-  
-  if( options.getOutDir() == null )
-  {
-   System.err.println("Output directory is not specified");
-   return;
-  }
-  
-  File outDir = new File( options.getOutDir() );
+        Set<String> processedDirs = new HashSet<String>();
 
-  if( outDir.isFile() )
-  {
-   System.err.println("Output path must point to a directory");
-   return;
-  }
-  
-  if( ! outDir.exists() && ! outDir.mkdirs() )
-  {
-   System.err.println("Can't create output directory");
-   return;
-  }
-  
-  int nThreads = -1;
-  
-  if( options.getThreadsNumber() != null )
-  {
-   try
-   {
-    nThreads = Integer.parseInt( options.getThreadsNumber() );
-   }
-   catch(Exception e)
-   {
-   }
-   
-   if( nThreads <= 0 || nThreads > 32 )
-   {
-    System.err.println("Invalid number of threads. Should be reasonable positive integer");
-    return;
-   }
-  }
-  else
-   nThreads = 1;
-  
-  
-  BlockingQueue<File> infiles = new LinkedBlockingQueue<File>();
-  
-  if( options.isPreloadFiles() || nThreads == 1 )
-  {
-   new CollectFilesTask(indirs, infiles, options).run();
+        for (String outf : options.getDirs()) {
+            File in = new File(outf);
 
-   if(infiles.size() <= 1 )
-   {
-    System.err.println("No files to process");
-    return;
-   }
-   
-   System.out.println(String.valueOf(infiles.size()+" submissions in the queue"));
-  }
-  
-  String sessionKey = null;
-  DefaultHttpClient httpclient = null;
-  
-  PrintStream log = null;
-  
-  try
-  {
-   log = new PrintStream( new File(outDir,"log.txt") );
-  }
-  catch(FileNotFoundException e1)
-  {
-   System.err.println("Can't create log file: "+new File(outDir,"log.txt").getAbsolutePath());
-   return;
-  }
+            if (!in.exists()) {
+                System.err.println("Input directory '" + outf + "' doesn't exist");
+                System.exit(1);
+            } else if (!in.isDirectory()) {
+                System.err.println("'" + outf + "' is not a directory");
+                System.exit(1);
+            }
 
-  if( options.getDatabaseURL() == null )
-  {
-   System.err.println("Database URI is required for remote operations");
-   return;
-  }
-  else if(  ! options.getDatabaseURL().endsWith("/") )
-   options.setDatabaseURI( options.getDatabaseURL()+"/" );
-  
-  if( options.getUser() == null )
-  {
-   System.err.println("User name is required for remote operations");
-   return;
-  }
-  
-  boolean ok = false;
-  
-  try
-  {
+            indirs.add(in);
+        }
 
-   httpclient = new DefaultHttpClient();
-   HttpPost httpost = new HttpPost(options.getDatabaseURL()+"Login");
-   
-   List<NameValuePair> nvps = new ArrayList<NameValuePair>();
-   nvps.add(new BasicNameValuePair("username", options.getUser() ));
-   nvps.add(new BasicNameValuePair("password", options.getPassword()!=null?options.getPassword():""));
-   
-   httpost.setEntity(new UrlEncodedFormEntity(nvps, HTTP.UTF_8));
-   
-   log.println("Trying to login onto the server");
-   
-   HttpResponse response = httpclient.execute(httpost);
-   
-   if( response.getStatusLine().getStatusCode() != HttpStatus.SC_OK )
-   {
-    log.println("Server response code is: "+response.getStatusLine().getStatusCode());
-    return;
-   }
-   
-   HttpEntity ent = response.getEntity();
-   
-   String respStr = EntityUtils.toString( ent ).trim();
-   
-   if( respStr.startsWith("OK:") )
-   {
-    System.out.println("Login successful");
-    log.println("Login successful");
-    sessionKey = respStr.substring(3);
-   }
-   else
-   {
-    log.println("Login failed: "+respStr);
-    return;
-   }
-   
-   EntityUtils.consume(ent);
-   
-   ok=true;
-  }
-  catch(Exception e)
-  {
-   log.println("ERROR: Login failed: "+e.getMessage());
-   log.close();
-   
-   return;
-  }
-  finally
-  {
-   if( ! ok )
-   {
-    httpclient.getConnectionManager().shutdown();
-    System.err.println("Login failed");
-    
-    System.exit(1);
-   }
-  }
-  
-  
-  if( options.isMaintenanceMode() )
-   setMaintenanceMode(httpclient, true, sessionKey, log);
-   
-  if(nThreads == 1)
-  {
-   Log psLog = new PrintStreamLog(log, false);
+        if (indirs.size() == 0) {
+            System.err.println("No files to process");
+            return;
+        }
 
-   new SubmitterTask("Main", options.getDatabaseURL() + "upload?" + Constants.sessionKey + "=" + sessionKey, infiles, outDir, options, psLog).run();
+        if (options.getOutDir() == null) {
+            System.err.println("Output directory is not specified");
+            return;
+        }
 
-   psLog.shutdown();
-  }
-  else
-  {
-   Log psLog = new PrintStreamLog(log, true);
+        File outDir = new File(options.getOutDir());
 
-   psLog.write("Starting " + nThreads + " threads");
+        if (outDir.isFile()) {
+            System.err.println("Output path must point to a directory");
+            return;
+        }
 
-   ExecutorService exec = Executors.newFixedThreadPool(nThreads + 1);
+        if (!outDir.exists() && !outDir.mkdirs()) {
+            System.err.println("Can't create output directory");
+            return;
+        }
 
-   exec.execute(new CollectFilesTask(indirs, infiles, options));
+        int nThreads = -1;
 
-   for(int i = 1; i <= nThreads; i++)
-    exec.execute(new SubmitterTask("Thr" + i, options.getDatabaseURL() + "upload?" + Constants.sessionKey + "=" + sessionKey, infiles, outDir, options,
-      psLog));
+        if (options.getThreadsNumber() != null) {
+            try {
+                nThreads = Integer.parseInt(options.getThreadsNumber());
+            } catch (Exception e) {
+            }
 
-   try
-   {
-    exec.shutdown();
+            if (nThreads <= 0 || nThreads > 32) {
+                System.err.println("Invalid number of threads. Should be reasonable positive integer");
+                return;
+            }
+        } else
+            nThreads = 1;
 
-    exec.awaitTermination(72, TimeUnit.HOURS);
-   }
-   catch(InterruptedException e)
-   {
-   }
+        BlockingQueue<File> infiles = new LinkedBlockingQueue<File>();
 
-   if( options.isMaintenanceMode() )
-    setMaintenanceMode(httpclient, false, sessionKey, log);
+        if (options.isPreloadFiles() || nThreads == 1) {
+            new CollectFilesTask(indirs, infiles, options).run();
 
-   
-   psLog.shutdown();
-  }
+            if (infiles.size() <= 1) {
+                System.err.println("No files to process");
+                return;
+            }
 
- }
- 
- 
- private static void setMaintenanceMode( HttpClient httpclient,  boolean mode, String sessionKey, PrintStream log )
- {
-  boolean ok = false;
+            System.out.println(String.valueOf(infiles.size() + " submissions in the queue"));
+        }
 
-  try
-  {
+        String sessionKey = null;
+        DefaultHttpClient httpclient = null;
 
-   HttpPost httpost = new HttpPost(options.getDatabaseURL() + "upload?" + Constants.sessionKey + "=" + sessionKey);
+        PrintStream log = null;
 
-   List<NameValuePair> nvps = new ArrayList<NameValuePair>();
-   nvps.add(new BasicNameValuePair(Constants.uploadHandlerParameter, Constants.MAINTENANCE_MODE_COMMAND));
-   nvps.add(new BasicNameValuePair(MaintenanceModeConstants.modeParam, String.valueOf(mode)));
+        try {
+            log = new PrintStream(new File(outDir, "log.txt"));
+        } catch (FileNotFoundException e1) {
+            System.err.println("Can't create log file: " + new File(outDir, "log.txt").getAbsolutePath());
+            return;
+        }
 
-   httpost.setEntity(new UrlEncodedFormEntity(nvps, HTTP.UTF_8));
+        if (options.getDatabaseURL() == null) {
+            System.err.println("Database URI is required for remote operations");
+            return;
+        } else if (!options.getDatabaseURL().endsWith("/"))
+            options.setDatabaseURI(options.getDatabaseURL() + "/");
 
-   log.println((mode?"Entering":"Leaving")+" maintenance mode");
+        if (options.getUser() == null) {
+            System.err.println("User name is required for remote operations");
+            return;
+        }
 
-   HttpResponse response = httpclient.execute(httpost);
+        boolean ok = false;
 
-   if(response.getStatusLine().getStatusCode() != HttpStatus.SC_OK)
-   {
-    log.println("Server response code is: " + response.getStatusLine().getStatusCode());
-    return;
-   }
+        try {
 
-   HttpEntity ent = response.getEntity();
+            httpclient = new DefaultHttpClient();
+            HttpPost httpost = new HttpPost(options.getDatabaseURL() + "Login");
 
-   String respStr = EntityUtils.toString(ent).trim();
+            List<NameValuePair> nvps = new ArrayList<NameValuePair>();
+            nvps.add(new BasicNameValuePair("username", options.getUser()));
+            nvps.add(new BasicNameValuePair("password", options.getPassword() != null ? options.getPassword() : ""));
 
-   if(respStr.startsWith("OK:"))
-   {
-    if( "WAS".equals(respStr.substring(3, 6)) )
-    {
-     System.out.println("Server was in requested mode");
-     log.println("Server was in requested mode");
+            httpost.setEntity(new UrlEncodedFormEntity(nvps, HTTP.UTF_8));
+
+            log.println("Trying to login onto the server");
+
+            HttpResponse response = httpclient.execute(httpost);
+
+            if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
+                log.println("Server response code is: " + response.getStatusLine().getStatusCode());
+                return;
+            }
+
+            HttpEntity ent = response.getEntity();
+
+            String respStr = EntityUtils.toString(ent).trim();
+
+            if (respStr.startsWith("OK:")) {
+                System.out.println("Login successful");
+                log.println("Login successful");
+                sessionKey = respStr.substring(3);
+            } else {
+                log.println("Login failed: " + respStr);
+                return;
+            }
+
+            EntityUtils.consume(ent);
+
+            ok = true;
+        } catch (Exception e) {
+            log.println("ERROR: Login failed: " + e.getMessage());
+            log.close();
+
+            return;
+        } finally {
+            if (!ok) {
+                httpclient.getConnectionManager().shutdown();
+                System.err.println("Login failed");
+
+                System.exit(1);
+            }
+        }
+
+        if (options.isMaintenanceMode())
+            setMaintenanceMode(httpclient, true, sessionKey, log);
+
+        if (nThreads == 1) {
+            Log psLog = new PrintStreamLog(log, false);
+
+            new SubmitterTask("Main", options.getDatabaseURL() + "upload?" + Constants.sessionKey + "=" + sessionKey,
+                    infiles, outDir, options, psLog).run();
+
+            psLog.shutdown();
+        } else {
+            Log psLog = new PrintStreamLog(log, true);
+
+            psLog.write("Starting " + nThreads + " threads");
+
+            ExecutorService exec = Executors.newFixedThreadPool(nThreads + 1);
+
+            exec.execute(new CollectFilesTask(indirs, infiles, options));
+
+            for (int i = 1; i <= nThreads; i++)
+                exec.execute(new SubmitterTask("Thr" + i, options.getDatabaseURL() + "upload?" + Constants.sessionKey
+                        + "=" + sessionKey, infiles, outDir, options, psLog));
+
+            try {
+                exec.shutdown();
+
+                exec.awaitTermination(72, TimeUnit.HOURS);
+            } catch (InterruptedException e) {
+            }
+
+            if (options.isMaintenanceMode())
+                setMaintenanceMode(httpclient, false, sessionKey, log);
+
+            psLog.shutdown();
+        }
+
     }
-    else
-    {
-     System.out.println((mode?"Entering":"Leaving")+" maintenance mode successful");
-     log.println((mode?"Entering":"Leaving")+" maintenance mode successful");
+
+    private static void setMaintenanceMode(HttpClient httpclient, boolean mode, String sessionKey, PrintStream log) {
+        boolean ok = false;
+
+        try {
+
+            HttpPost httpost = new HttpPost(options.getDatabaseURL() + "upload?" + Constants.sessionKey + "="
+                    + sessionKey);
+
+            List<NameValuePair> nvps = new ArrayList<NameValuePair>();
+            nvps.add(new BasicNameValuePair(Constants.uploadHandlerParameter, Constants.MAINTENANCE_MODE_COMMAND));
+            nvps.add(new BasicNameValuePair(MaintenanceModeConstants.modeParam, String.valueOf(mode)));
+
+            httpost.setEntity(new UrlEncodedFormEntity(nvps, HTTP.UTF_8));
+
+            log.println((mode ? "Entering" : "Leaving") + " maintenance mode");
+
+            HttpResponse response = httpclient.execute(httpost);
+
+            if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
+                log.println("Server response code is: " + response.getStatusLine().getStatusCode());
+                return;
+            }
+
+            HttpEntity ent = response.getEntity();
+
+            String respStr = EntityUtils.toString(ent).trim();
+
+            if (respStr.startsWith("OK:")) {
+                if ("WAS".equals(respStr.substring(3, 6))) {
+                    System.out.println("Server was in requested mode");
+                    log.println("Server was in requested mode");
+                } else {
+                    System.out.println((mode ? "Entering" : "Leaving") + " maintenance mode successful");
+                    log.println((mode ? "Entering" : "Leaving") + " maintenance mode successful");
+                }
+
+                ok = true;
+            } else if (respStr.startsWith("ERROR:"))
+                log.println("Maintenance mode switch error: " + respStr.substring(6));
+
+            EntityUtils.consume(ent);
+
+        } catch (Exception e) {
+            ok = false;
+        } finally {
+            if (!ok) {
+                httpclient.getConnectionManager().shutdown();
+                System.err.println("Setting maintenance mode failed");
+
+                System.exit(1);
+            }
+        }
+
     }
-    
-    ok = true;
-   }
-   else if( respStr.startsWith("ERROR:") )
-    log.println("Maintenance mode switch error: "+respStr.substring(6));
 
-   EntityUtils.consume(ent);
+    static class NullLog implements Log {
+        @Override
+        public void shutdown() {
+        }
 
-  }
-  catch(Exception e)
-  {
-   ok = false;
-  }
-  finally
-  {
-   if(!ok)
-   {
-    httpclient.getConnectionManager().shutdown();
-    System.err.println("Setting maintenance mode failed");
+        @Override
+        public void write(String msg) {
+        }
 
-    System.exit(1);
-   }
-  }
+        @Override
+        public void printStackTrace(Exception e) {
+        }
+    }
 
- }
- 
- static class NullLog implements Log
- {
-  @Override
-  public void shutdown()
-  {
-  }
+    static class PrintStreamLog implements Log {
+        private PrintStream log;
+        private Lock lock = new ReentrantLock();
 
-  @Override
-  public void write(String msg)
-  {
-  }
+        private boolean showThreads;
 
-  @Override
-  public void printStackTrace(Exception e)
-  {
-  }
- }
- 
- static class PrintStreamLog implements Log
- {
-  private PrintStream log;
-  private Lock        lock = new ReentrantLock();
-  
-  private boolean showThreads;
+        PrintStreamLog(PrintStream l, boolean th) {
+            log = l;
+            showThreads = th;
+        }
 
-  PrintStreamLog(PrintStream l, boolean th)
-  {
-   log = l;
-   showThreads = th;
-  }
+        public void shutdown() {
+            log.close();
+        }
 
-  public void shutdown()
-  {
-   log.close();
-  }
+        public void write(String msg) {
+            lock.lock();
 
-  public void write(String msg)
-  {
-   lock.lock();
+            try {
+                if (showThreads)
+                    log.print("[" + Thread.currentThread().getName() + "] ");
 
-   try
-   {
-    if( showThreads )
-     log.print("[" + Thread.currentThread().getName() + "] ");
-    
-    log.println(msg);
-   }
-   finally
-   {
-    lock.unlock();
-   }
-  }
-  
-  @Override
-  public void printStackTrace(Exception e)
-  {
-   lock.lock();
+                log.println(msg);
+            } finally {
+                lock.unlock();
+            }
+        }
 
-   try
-   {
-    e.printStackTrace(log);
-   }
-   finally
-   {
-    lock.unlock();
-   }
-  }
+        @Override
+        public void printStackTrace(Exception e) {
+            lock.lock();
 
- }
+            try {
+                e.printStackTrace(log);
+            } finally {
+                lock.unlock();
+            }
+        }
+
+    }
 
 }

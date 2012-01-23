@@ -5,155 +5,135 @@ import java.util.List;
 import org.kohsuke.args4j.Argument;
 import org.kohsuke.args4j.Option;
 
-public class Options
-{
- @Option( name = "-r", usage="Process recursively")
- private boolean recursive;
+public class Options {
+    @Option(name = "-r", usage = "Process recursively")
+    private boolean recursive;
 
- @Option( name = "-e", usage="Save server response")
- private boolean saveResponse;
+    @Option(name = "-e", usage = "Save server response")
+    private boolean saveResponse;
 
- @Option( name = "-s", usage="Store files in database. Otherwise they will be verified but not stored")
- private boolean store;
- 
- @Option( name = "-h", usage="Database base URL", metaVar="URL")
- private String databaseURL;
- 
- @Option( name = "-u", usage="User name", metaVar="USER")
- private String user;
+    @Option(name = "-s", usage = "Store files in database. Otherwise they will be verified but not stored")
+    private boolean store;
 
- @Option( name = "-p", usage="User password", metaVar="PASS")
- private String password;
- 
- @Option( name = "-update", usage="Update submissions")
- private boolean update;
- 
- @Option( name = "-new", usage="Load new submissions")
- private boolean newSub;
+    @Option(name = "-h", usage = "Database base URL", metaVar = "URL")
+    private String databaseURL;
 
- @Option( name = "-i", usage="Use directory name as submission ID")
- private boolean dirAsID;
+    @Option(name = "-u", usage = "User name", metaVar = "USER")
+    private String user;
 
- @Option( name = "-m", usage="Use module file name as module ID")
- private boolean modFileAsID;
+    @Option(name = "-p", usage = "User password", metaVar = "PASS")
+    private String password;
 
- @Option( name = "-o", usage="Output directory", metaVar="DIR")
- private String outDir;
+    @Option(name = "-update", usage = "Update submissions")
+    private boolean update;
 
- @Option( name = "-t", usage="Number of threads", metaVar="THRNUM")
- private String thrNum;
+    @Option(name = "-new", usage = "Load new submissions")
+    private boolean newSub;
 
- @Option( name = "-c", usage="Continue loading")
- private boolean continueLd;
+    @Option(name = "-i", usage = "Use directory name as submission ID")
+    private boolean dirAsID;
 
- @Option( name = "-f", usage="Refresh submissions")
- private boolean refresh;
- 
- @Option( name = "-mmode", usage="Set maintenance mode")
- private boolean mmode;
+    @Option(name = "-m", usage = "Use module file name as module ID")
+    private boolean modFileAsID;
 
- @Option( name = "-a", usage="Tags list. Example: Security:Public,Manager:Enable=2012-01-01")
- private String tagString;
+    @Option(name = "-o", usage = "Output directory", metaVar = "DIR")
+    private String outDir;
 
- @Option( name = "-l", usage="Preload file list")
- private boolean preloadFiles;
+    @Option(name = "-t", usage = "Number of threads", metaVar = "THRNUM")
+    private String thrNum;
 
- @Argument
- private List<String> dirs;
+    @Option(name = "-c", usage = "Continue loading")
+    private boolean continueLd;
 
- public boolean isStore()
- {
-  return store;
- }
+    @Option(name = "-f", usage = "Refresh submissions")
+    private boolean refresh;
 
- public String getDatabaseURL()
- {
-  return databaseURL;
- }
+    @Option(name = "-mmode", usage = "Set maintenance mode")
+    private boolean mmode;
 
- public String getUser()
- {
-  return user;
- }
+    @Option(name = "-a", usage = "Tags list. Example: Security:Public,Manager:Enable=2012-01-01")
+    private String tagString;
 
- public String getPassword()
- {
-  return password;
- }
+    @Option(name = "-l", usage = "Preload file list")
+    private boolean preloadFiles;
 
- public List<String> getDirs()
- {
-  return dirs;
- }
+    @Argument
+    private List<String> dirs;
 
- public void setDatabaseURI(String databaseURI)
- {
-  this.databaseURL = databaseURI;
- }
+    public boolean isStore() {
+        return store;
+    }
 
- public boolean isSaveResponse()
- {
-  return saveResponse;
- }
+    public String getDatabaseURL() {
+        return databaseURL;
+    }
 
- public boolean isUpdateSubmissions()
- {
-  return update;
- }
+    public String getUser() {
+        return user;
+    }
 
- public boolean isNewSubmissions()
- {
-  return newSub;
- }
+    public String getPassword() {
+        return password;
+    }
 
- public String getOutDir()
- {
-  return outDir;
- }
+    public List<String> getDirs() {
+        return dirs;
+    }
 
- public boolean isRecursive()
- {
-  return recursive;
- }
+    public void setDatabaseURI(String databaseURI) {
+        this.databaseURL = databaseURI;
+    }
 
- public boolean isDirAsID()
- {
-  return dirAsID;
- }
+    public boolean isSaveResponse() {
+        return saveResponse;
+    }
 
- public boolean isModFileAsID()
- {
-  return modFileAsID;
- }
+    public boolean isUpdateSubmissions() {
+        return update;
+    }
 
- public String getThreadsNumber()
- {
-  return thrNum;
- }
+    public boolean isNewSubmissions() {
+        return newSub;
+    }
 
- public boolean isContinue()
- {
-  return continueLd;
- }
- 
- public boolean isRefresh()
- {
-  return refresh;
- }
+    public String getOutDir() {
+        return outDir;
+    }
 
- public boolean isPreloadFiles()
- {
-  return preloadFiles;
- }
+    public boolean isRecursive() {
+        return recursive;
+    }
 
- public String getTagString()
- {
-  return tagString;
- }
+    public boolean isDirAsID() {
+        return dirAsID;
+    }
 
- public boolean isMaintenanceMode()
- {
-  return mmode;
- }
+    public boolean isModFileAsID() {
+        return modFileAsID;
+    }
+
+    public String getThreadsNumber() {
+        return thrNum;
+    }
+
+    public boolean isContinue() {
+        return continueLd;
+    }
+
+    public boolean isRefresh() {
+        return refresh;
+    }
+
+    public boolean isPreloadFiles() {
+        return preloadFiles;
+    }
+
+    public String getTagString() {
+        return tagString;
+    }
+
+    public boolean isMaintenanceMode() {
+        return mmode;
+    }
 
 }
