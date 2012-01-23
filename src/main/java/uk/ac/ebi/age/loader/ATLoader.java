@@ -47,12 +47,14 @@ public class ATLoader {
             System.err.println(e.getMessage());
             System.err.println(usage);
             parser.printUsage(System.err);
+            System.exit(10);
             return;
         }
 
         if (options.getDirs() == null || options.getDirs().size() == 0) {
             System.err.println(usage);
             parser.printUsage(System.err);
+            System.exit(10);
             return;
         }
 
@@ -66,9 +68,11 @@ public class ATLoader {
             if (!in.exists()) {
                 System.err.println("Input directory '" + outf + "' doesn't exist");
                 System.exit(1);
+                return;
             } else if (!in.isDirectory()) {
                 System.err.println("'" + outf + "' is not a directory");
                 System.exit(1);
+                return;
             }
 
             indirs.add(in);
@@ -76,11 +80,13 @@ public class ATLoader {
 
         if (indirs.size() == 0) {
             System.err.println("No files to process");
+            System.exit(1);
             return;
         }
 
         if (options.getOutDir() == null) {
             System.err.println("Output directory is not specified");
+            System.exit(1);
             return;
         }
 
@@ -88,11 +94,13 @@ public class ATLoader {
 
         if (outDir.isFile()) {
             System.err.println("Output path must point to a directory");
+            System.exit(1);
             return;
         }
 
         if (!outDir.exists() && !outDir.mkdirs()) {
             System.err.println("Can't create output directory");
+            System.exit(1);
             return;
         }
 
@@ -102,10 +110,12 @@ public class ATLoader {
             try {
                 nThreads = Integer.parseInt(options.getThreadsNumber());
             } catch (Exception e) {
+                //Do nothing
             }
 
             if (nThreads <= 0 || nThreads > 32) {
                 System.err.println("Invalid number of threads. Should be reasonable positive integer");
+                System.exit(1);
                 return;
             }
         } else
@@ -118,6 +128,7 @@ public class ATLoader {
 
             if (infiles.size() <= 1) {
                 System.err.println("No files to process");
+                System.exit(1);
                 return;
             }
 
@@ -133,17 +144,20 @@ public class ATLoader {
             log = new PrintStream(new File(outDir, "log.txt"));
         } catch (FileNotFoundException e1) {
             System.err.println("Can't create log file: " + new File(outDir, "log.txt").getAbsolutePath());
+            System.exit(1);
             return;
         }
 
         if (options.getDatabaseURL() == null) {
             System.err.println("Database URI is required for remote operations");
+            System.exit(1);
             return;
         } else if (!options.getDatabaseURL().endsWith("/"))
             options.setDatabaseURI(options.getDatabaseURL() + "/");
 
         if (options.getUser() == null) {
             System.err.println("User name is required for remote operations");
+            System.exit(1);
             return;
         }
 
@@ -166,6 +180,7 @@ public class ATLoader {
 
             if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
                 log.println("Server response code is: " + response.getStatusLine().getStatusCode());
+                System.exit(2);
                 return;
             }
 
@@ -179,6 +194,7 @@ public class ATLoader {
                 sessionKey = respStr.substring(3);
             } else {
                 log.println("Login failed: " + respStr);
+                System.exit(3);
                 return;
             }
 
@@ -188,14 +204,14 @@ public class ATLoader {
         } catch (Exception e) {
             log.println("ERROR: Login failed: " + e.getMessage());
             log.close();
-
+            System.exit(3);
             return;
         } finally {
             if (!ok) {
                 httpclient.getConnectionManager().shutdown();
                 System.err.println("Login failed");
-
-                System.exit(1);
+                System.exit(3);
+                return;
             }
         }
 
