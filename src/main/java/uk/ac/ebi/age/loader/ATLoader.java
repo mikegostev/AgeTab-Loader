@@ -8,8 +8,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
@@ -221,10 +223,13 @@ public class ATLoader {
         if (nThreads == 1) {
             Log psLog = new PrintStreamLog(log, false);
 
-            new SubmitterTask("Main", options.getDatabaseURL() + "upload?" + Constants.sessionKey + "=" + sessionKey,
-                    infiles, outDir, options, psLog).run();
+           int status =  new SubmitterTask("Main", options.getDatabaseURL() + "upload?" + Constants.sessionKey + "=" + sessionKey,
+                    infiles, outDir, options, psLog).call();
 
             psLog.shutdown();
+            
+            if( status != SubmitterTask.ST_OK )
+             System.exit(10);
         } else {
             Log psLog = new PrintStreamLog(log, true);
 
@@ -234,21 +239,41 @@ public class ATLoader {
 
             exec.execute(new CollectFilesTask(indirs, infiles, options));
 
+            Future<Integer> results[] = new Future[nThreads];
+            
             for (int i = 1; i <= nThreads; i++)
-                exec.execute(new SubmitterTask("Thr" + i, options.getDatabaseURL() + "upload?" + Constants.sessionKey
+             results[i-1] = exec.submit(new SubmitterTask("Thr" + i, options.getDatabaseURL() + "upload?" + Constants.sessionKey
                         + "=" + sessionKey, infiles, outDir, options, psLog));
 
+            int status = 0;
+
             try {
+             
+             
+             for (int i = 0; i < nThreads; i++)
+             {
+              try
+              {
+               if( results[i].get() != SubmitterTask.ST_OK )
+                status = 10;
+              }
+              catch(ExecutionException e)
+              {
+               status = 11;              }
+             }
                 exec.shutdown();
 
                 exec.awaitTermination(72, TimeUnit.HOURS);
-            } catch (InterruptedException e) {
+            } 
+            catch (InterruptedException e) {
             }
 
             if (options.isMaintenanceMode())
                 setMaintenanceMode(httpclient, false, sessionKey, log);
 
             psLog.shutdown();
+            
+            System.exit(status);
         }
 
     }
