@@ -30,8 +30,13 @@ classpath="$jars:$base/config";
 
 $java $args -classpath $classpath uk.ac.ebi.age.loader.ATLoader $@
 
+firstexit=$?
+
 #temporary work around for broken default behaviour
-if [ $? != "0"]
+if [ $firstexit != "0"]
 then
     $java $args -classpath $classpath uk.ac.ebi.age.loader.ATLoader -update $@
+    firstexit=$?
 fi
+
+exit $firstexit
