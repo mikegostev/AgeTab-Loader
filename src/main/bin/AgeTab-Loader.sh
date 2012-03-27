@@ -33,8 +33,9 @@ $java $args -classpath $classpath uk.ac.ebi.age.loader.ATLoader $@
 firstexit=$?
 
 #temporary work around for broken default behaviour
-if [ $firstexit != "0"]
+if [[ $firstexit != "0" ]]
 then
+    echo "Retrying with -update ..."
     $java $args -classpath $classpath uk.ac.ebi.age.loader.ATLoader -update $@
     firstexit=$?
 fi
