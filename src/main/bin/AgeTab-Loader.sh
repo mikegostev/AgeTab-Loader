@@ -29,3 +29,9 @@ done
 classpath="$jars:$base/config";
 
 $java $args -classpath $classpath uk.ac.ebi.age.loader.ATLoader $@
+
+#temporary work around for broken default behaviour
+if [ $? != "0"]
+then
+    $java $args -classpath $classpath uk.ac.ebi.age.loader.ATLoader -update $@
+fi
