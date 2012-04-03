@@ -49,14 +49,14 @@ public class ATLoader {
             System.err.println(e.getMessage());
             System.err.println(usage);
             parser.printUsage(System.err);
-            System.exit(10);
+            System.exit(1);
             return;
         }
 
         if (options.getDirs() == null || options.getDirs().size() == 0) {
             System.err.println(usage);
             parser.printUsage(System.err);
-            System.exit(10);
+            System.exit(1);
             return;
         }
 
@@ -112,7 +112,7 @@ public class ATLoader {
             try {
                 nThreads = Integer.parseInt(options.getThreadsNumber());
             } catch (Exception e) {
-                //Do nothing
+                // Do nothing
             }
 
             if (nThreads <= 0 || nThreads > 32) {
@@ -223,13 +223,13 @@ public class ATLoader {
         if (nThreads == 1) {
             Log psLog = new PrintStreamLog(log, false);
 
-           int status =  new SubmitterTask("Main", options.getDatabaseURL() + "upload?" + Constants.sessionKey + "=" + sessionKey,
-                    infiles, outDir, options, psLog).call();
+            int status = new SubmitterTask("Main", options.getDatabaseURL() + "upload?" + Constants.sessionKey + "="
+                    + sessionKey, infiles, outDir, options, psLog).call();
 
             psLog.shutdown();
-            
-            if( status != SubmitterTask.ST_OK )
-             System.exit(10);
+
+            if (status != SubmitterTask.ST_OK)
+                System.exit(10);
         } else {
             Log psLog = new PrintStreamLog(log, true);
 
@@ -240,39 +240,34 @@ public class ATLoader {
             exec.execute(new CollectFilesTask(indirs, infiles, options));
 
             Future<Integer> results[] = new Future[nThreads];
-            
+
             for (int i = 1; i <= nThreads; i++)
-             results[i-1] = exec.submit(new SubmitterTask("Thr" + i, options.getDatabaseURL() + "upload?" + Constants.sessionKey
-                        + "=" + sessionKey, infiles, outDir, options, psLog));
+                results[i - 1] = exec.submit(new SubmitterTask("Thr" + i, options.getDatabaseURL() + "upload?"
+                        + Constants.sessionKey + "=" + sessionKey, infiles, outDir, options, psLog));
 
             int status = 0;
 
             try {
-             
-             
-             for (int i = 0; i < nThreads; i++)
-             {
-              try
-              {
-               if( results[i].get() != SubmitterTask.ST_OK )
-                status = 10;
-              }
-              catch(ExecutionException e)
-              {
-               status = 11;              }
-             }
+
+                for (int i = 0; i < nThreads; i++) {
+                    try {
+                        if ((results[i].get() != SubmitterTask.ST_OK) && status < 10)
+                            status = 10;
+                    } catch (ExecutionException e) {
+                        status = 11;
+                    }
+                }
                 exec.shutdown();
 
                 exec.awaitTermination(72, TimeUnit.HOURS);
-            } 
-            catch (InterruptedException e) {
+            } catch (InterruptedException e) {
             }
 
             if (options.isMaintenanceMode())
                 setMaintenanceMode(httpclient, false, sessionKey, log);
 
             psLog.shutdown();
-            
+
             System.exit(status);
         }
 
@@ -327,7 +322,7 @@ public class ATLoader {
                 httpclient.getConnectionManager().shutdown();
                 System.err.println("Setting maintenance mode failed");
 
-                System.exit(1);
+                System.exit(20);
             }
         }
 
