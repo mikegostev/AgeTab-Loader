@@ -142,7 +142,7 @@ public class SubmitterTask implements Callable<Integer>
      else
       sts = Status.UPDATEORNEW;
 
-     reqEntity.addPart(Constants.uploadHandlerParameter, new StringBody(Constants.SUBMISSON_COMMAND));
+     reqEntity.addPart(Constants.serviceHandlerParameter, new StringBody(Constants.SUBMISSON_COMMAND));
      reqEntity.addPart(SubmissionConstants.SUBMISSON_KEY, new StringBody(key));
      reqEntity.addPart(SubmissionConstants.SUBMISSON_STATUS, new StringBody(sts.name()));
 

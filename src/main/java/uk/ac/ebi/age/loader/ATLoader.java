@@ -282,7 +282,7 @@ public class ATLoader {
                     + sessionKey);
 
             List<NameValuePair> nvps = new ArrayList<NameValuePair>();
-            nvps.add(new BasicNameValuePair(Constants.uploadHandlerParameter, Constants.MAINTENANCE_MODE_COMMAND));
+            nvps.add(new BasicNameValuePair(Constants.serviceHandlerParameter, Constants.MAINTENANCE_MODE_COMMAND));
             nvps.add(new BasicNameValuePair(MaintenanceModeConstants.modeParam, String.valueOf(mode)));
 
             httpost.setEntity(new UrlEncodedFormEntity(nvps, HTTP.UTF_8));
