@@ -11,11 +11,13 @@ public class CollectFilesTask implements Runnable {
     private Set<String> processedDirs;
     private BlockingQueue<File> infiles;
     private Options options;
+    private Log log;
 
-    public CollectFilesTask(Collection<File> rds, BlockingQueue<File> inf, Options opt) {
+    public CollectFilesTask(Collection<File> rds, BlockingQueue<File> inf, Options opt, Log lg ) {
         rootDirs = rds;
         infiles = inf;
         options = opt;
+        log = lg;
     }
 
     // public static void collect(Set<File> indirs, BlockingQueue<File> infiles2, Options options2)
@@ -38,11 +40,16 @@ public class CollectFilesTask implements Runnable {
 
     @Override
     public void run() {
+        String thNm = Thread.currentThread().getName();
+        Thread.currentThread().setName("Collector");
+        
         processedDirs = new HashSet<String>();
 
         for (File rd : rootDirs)
             collectInput(rd);
 
+        Thread.currentThread().setName(thNm);
+        
         while (true) {
             try {
                 infiles.put(new File(""));
@@ -72,6 +79,8 @@ public class CollectFilesTask implements Runnable {
 
                         added = true;
 
+                        log.write("Added: "+in.getAbsolutePath()+" ("+infiles.size()+" in the queue)");
+                        
                         continue dir;
                     } catch (InterruptedException e) {
                     }

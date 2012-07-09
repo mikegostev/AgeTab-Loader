@@ -3,7 +3,10 @@ package uk.ac.ebi.age.loader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintStream;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -125,8 +128,19 @@ public class ATLoader {
 
         BlockingQueue<File> infiles = new LinkedBlockingQueue<File>();
 
+        PrintStream log = null;
+        try {
+         log = new PrintStream(new File(outDir, "log.txt"));
+        } catch (FileNotFoundException e1) {
+         System.err.println("Can't create log file: " + new File(outDir, "log.txt").getAbsolutePath());
+         System.exit(1);
+         return;
+        }
+
         if (options.isPreloadFiles() || nThreads == 1) {
-            new CollectFilesTask(indirs, infiles, options).run();
+         Log psLog = new PrintStreamLog(log, true, false);
+ 
+         new CollectFilesTask(indirs, infiles, options, psLog).run();
 
             if (infiles.size() <= 1) {
                 System.err.println("No files to process");
@@ -140,15 +154,7 @@ public class ATLoader {
         String sessionKey = null;
         DefaultHttpClient httpclient = null;
 
-        PrintStream log = null;
 
-        try {
-            log = new PrintStream(new File(outDir, "log.txt"));
-        } catch (FileNotFoundException e1) {
-            System.err.println("Can't create log file: " + new File(outDir, "log.txt").getAbsolutePath());
-            System.exit(1);
-            return;
-        }
 
         if (options.getDatabaseURL() == null) {
             System.err.println("Database URI is required for remote operations");
@@ -221,7 +227,7 @@ public class ATLoader {
             setMaintenanceMode(httpclient, true, sessionKey, log);
 
         if (nThreads == 1) {
-            Log psLog = new PrintStreamLog(log, false);
+            Log psLog = new PrintStreamLog(log, true, false);
 
             int status = new SubmitterTask("Main", options.getDatabaseURL() + "upload?" + Constants.sessionKey + "="
                     + sessionKey, infiles, outDir, options, psLog).call();
@@ -231,14 +237,16 @@ public class ATLoader {
             if (status != SubmitterTask.ST_OK)
                 System.exit(10);
         } else {
-            Log psLog = new PrintStreamLog(log, true);
+            Log psLog = new PrintStreamLog(log, true, true);
 
             psLog.write("Starting " + nThreads + " threads");
 
             ExecutorService exec = Executors.newFixedThreadPool(nThreads + 1);
 
-            exec.execute(new CollectFilesTask(indirs, infiles, options));
+            if( ! options.isPreloadFiles() )
+             exec.execute(new CollectFilesTask(indirs, infiles, options, psLog ));
 
+            @SuppressWarnings("unchecked")
             Future<Integer> results[] = new Future[nThreads];
 
             for (int i = 1; i <= nThreads; i++)
@@ -346,11 +354,15 @@ public class ATLoader {
         private PrintStream log;
         private Lock lock = new ReentrantLock();
 
+        private static DateFormat dformat = new SimpleDateFormat("dd/MM/yy HH:mm:ss");
+        
         private boolean showThreads;
+        private boolean showTime;
 
-        PrintStreamLog(PrintStream l, boolean th) {
+        PrintStreamLog(PrintStream l, boolean tm, boolean th) {
             log = l;
             showThreads = th;
+            showTime = tm;
         }
 
         public void shutdown() {
@@ -361,7 +373,10 @@ public class ATLoader {
             lock.lock();
 
             try {
-                if (showThreads)
+             if (showTime)
+              log.print(dformat.format( new Date() ));
+
+             if (showThreads)
                     log.print("[" + Thread.currentThread().getName() + "] ");
 
                 log.println(msg);
